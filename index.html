@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.20.1/moment.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  
+  <title>Harvest Tracker</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous" />
+  <style>
+	body {
+		margin: 16px 0;
+	}
+	#main {
+		
+	}
+	.table {
+		margin: auto;
+	}
+	th:first-child {
+		min-width: 150px;
+	}
+	td:last-child {
+		font-weight: bold;
+	}
+	#result {
+		font-size: 30px;
+		color: var(--red);
+	}
+  </style>
+</head>
+<body>
+	<div class="container" id="main">
+		<div>
+			<div class="form-group form-inline">
+				<input class="form-control mr-4" type="date" id="date" />
+				<div class="btn-group">
+					<button class="btn btn-primary" id="go">Get 2 Weeks</button>
+					<button class="btn btn-secondary" id="get_all">Get All</button>
+				</div>
+			</div>
+			<h2></h2>
+		</div>
+		<table class="table" id="entries">
+			<thead>
+				<tr>
+					<th>Date</th>
+					<th>Task</th>
+					<th>Notes</th>
+					<th>Time</th>
+				</tr>
+			</thead>
+			<tbody>
+			</tbody>
+			<tfoot>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td id="result"></td>
+			</tfoot>
+		</table>
+		<div class="alert alert-danger d-none" id="harvest_error">
+		</div>
+	</div>
+<script src="credentials.js"></script>
+<script>
+$(function() {
+
+	function performRequest(options)
+	{
+		//Options: {start, format, next}
+		$.ajax({
+			url: (typeof options.next == "string" ? options.next : 'https://api.harvestapp.com/v2/time_entries'),
+			headers: {
+				"Authorization": "Bearer " + HARVEST_API_KEY,
+				"Harvest-Account-ID": HARVEST_ACCOUNT_ID
+			},
+			method: 'GET',
+			data: (typeof options.next == "string" ? {} : {
+				from: options.start.format("YYYY-MM-DD"),
+				to: options.finish.format("YYYY-MM-DD")
+			}),
+			dataType: "json",
+			success: function(data, status, jqXHR) {
+				$.each(data.time_entries, function(i, entry) {
+					options.hours += entry.hours;
+					$("#entries tbody").append(
+						"<tr><td>" + moment(entry.spent_date).format("ddd DD MMM YYYY")
+						+ "</td><td>" + entry.project.name + ": " + entry.task.name 
+						+ "</td><td>" + entry.notes
+						+ "</td><td>" + entry.hours + "</td></tr>");
+				})
+				if (data.links.next != null) {
+					options.next = data.links.next;
+					performRequest(options);
+				} else {
+					$("#result").text(options.hours);
+				}
+				
+				
+			},
+			error: function(jqXHR, textStatus, errorThrown) {
+				$("#harvest_error").removeClass("d-none").text("Request failed. This is either because probably because you are not running from a web server, or your API credentials are incorrect. Please try again.");
+			}
+		});
+	}
+
+    $("button").click(function() {
+		$("#entries").find("tbody").empty();
+		$("#harvest_error").addClass("d-none");
+		
+		if (typeof HARVEST_ACCOUNT_ID == "undefined" || typeof HARVEST_API_KEY == "undefined")
+		{
+			$("#harvest_error").removeClass("d-none").text("No API keys set. Please add your API keys to credentials.js and try again.");
+			return;
+		}
+		
+        var finish = moment($("#date").val());
+        var start = ($(this).is("#go") ? moment(finish).subtract(13, 'days') : moment("2000-01-01"));
+		
+        var next = true;
+        var hours = 0;
+        var notes = "";
+        $("h2").text("Hours from " + start.format("YYYY-MM-DD") + " to " + finish.format("YYYY-MM-DD"))
+		performRequest({start: start, finish: finish, hours: 0});
+    });
+	
+	$("#date").val(moment().format("YYYY-MM-DD"));
+});
+</script>
+</body>
+</html>
